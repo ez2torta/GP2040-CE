@@ -122,16 +122,19 @@ bool SwitchProDriver::process(Gamepad * gamepad) {
     switchReport.inputs.buttonL = gamepad->pressedL1();
     switchReport.inputs.buttonZL = gamepad->pressedL2();
 
-    // analog
+    // analog (12-bit). Map directly from 16-bit gamepad state to 12-bit fields.
+    // Note: Do NOT negate Y; setY expects an unsigned 12-bit value and the
+    // platform-neutral orientation is already handled upstream.
     uint16_t scaleLeftStickX = scale16To12(gamepad->state.lx);
     uint16_t scaleLeftStickY = scale16To12(gamepad->state.ly);
     uint16_t scaleRightStickX = scale16To12(gamepad->state.rx);
     uint16_t scaleRightStickY = scale16To12(gamepad->state.ry);
-    if ((scaleLeftStickX >= leftMinX) && (scaleLeftStickX < leftMaxX)) switchReport.inputs.leftStick.setX(scaleLeftStickX);
-    if ((scaleLeftStickY >= leftMinY) && (scaleLeftStickY < leftMaxY)) switchReport.inputs.leftStick.setY(-scaleLeftStickY);
 
-    if ((scaleRightStickX >= rightMinX) && (scaleRightStickX < rightMaxX)) switchReport.inputs.rightStick.setX(scaleRightStickX);
-    if ((scaleRightStickY >= rightMinY) && (scaleRightStickY < rightMaxY)) switchReport.inputs.rightStick.setY(-scaleRightStickY);
+    switchReport.inputs.leftStick.setX(scaleLeftStickX);
+    switchReport.inputs.leftStick.setY(scaleLeftStickY);
+
+    switchReport.inputs.rightStick.setX(scaleRightStickX);
+    switchReport.inputs.rightStick.setY(scaleRightStickY);
 
     switchReport.rumbleReport = 0x09;
     //switchReport.reportID = inputMode;
