@@ -160,16 +160,67 @@ bool SwitchProDriver::process(Gamepad * gamepad) {
 
     if (isReady && !reportSent) {
         if ((now - last_report_timer) > SWITCH_PRO_KEEPALIVE_TIMER) {
-            switchReport.timestamp = last_report_counter;
-            void * inputReport = &switchReport;
-            uint16_t report_size = sizeof(switchReport);
-            if (memcmp(last_report, inputReport, report_size) != 0) {
-                // HID ready + report sent, copy previous report
-                if (tud_hid_ready() && sendReport(0, inputReport, report_size) == true ) {
-                    memcpy(last_report, inputReport, report_size);
+            // Build HID report that matches our descriptor (Report ID 0x30)
+            uint8_t hid30[SWITCH_PRO_ENDPOINT_SIZE] = {0};
+            hid30[0] = 0x30; // Report ID
+
+            // Buttons (14 bits packed into 2 bytes: first 10 + next 4)
+            // Order: Y X B A RS SL R ZR | Minus Plus R3 L3 Home Capture (LSB->MSB)
+            uint16_t btns14 = 0;
+            btns14 |= (switchReport.inputs.buttonY      ? 1u : 0u) << 0;
+            btns14 |= (switchReport.inputs.buttonX      ? 1u : 0u) << 1;
+            btns14 |= (switchReport.inputs.buttonB      ? 1u : 0u) << 2;
+            btns14 |= (switchReport.inputs.buttonA      ? 1u : 0u) << 3;
+            btns14 |= (switchReport.inputs.buttonRightSR? 1u : 0u) << 4;
+            btns14 |= (switchReport.inputs.buttonRightSL? 1u : 0u) << 5;
+            btns14 |= (switchReport.inputs.buttonR      ? 1u : 0u) << 6;
+            btns14 |= (switchReport.inputs.buttonZR     ? 1u : 0u) << 7;
+            btns14 |= (switchReport.inputs.buttonMinus  ? 1u : 0u) << 8;
+            btns14 |= (switchReport.inputs.buttonPlus   ? 1u : 0u) << 9;
+            btns14 |= (switchReport.inputs.buttonThumbR ? 1u : 0u) << 10;
+            btns14 |= (switchReport.inputs.buttonThumbL ? 1u : 0u) << 11;
+            btns14 |= (switchReport.inputs.buttonHome   ? 1u : 0u) << 12;
+            btns14 |= (switchReport.inputs.buttonCapture? 1u : 0u) << 13;
+            // write 14 bits little-endian
+            hid30[1] = btns14 & 0xFF;
+            hid30[2] = (btns14 >> 8) & 0x3F; // keep 6 bits; upper 2 bits are padding as per descriptor
+
+            // 4 axes of 16-bit (Logical Max per descriptor). Use full 16-bit from gamepad state
+            auto put16 = [](uint8_t* p, uint16_t v){ p[0] = (uint8_t)(v & 0xFF); p[1] = (uint8_t)(v >> 8); };
+            uint16_t lx16 = gamepad->state.lx;
+            uint16_t ly16 = gamepad->state.ly;
+            uint16_t rx16 = gamepad->state.rx;
+            uint16_t ry16 = gamepad->state.ry;
+            put16(&hid30[3],  lx16);
+            put16(&hid30[5],  ly16);
+            put16(&hid30[7],  rx16);
+            put16(&hid30[9],  ry16);
+
+            // Hat (4 bits) + 4 more buttons (we map L, ZL, LeftSL, LeftSR as example)
+            uint8_t hat = SWITCH_PRO_HAT_NOTHING;
+            if      (switchReport.inputs.dpadUp && switchReport.inputs.dpadRight)    hat = SWITCH_PRO_HAT_UPRIGHT;
+            else if (switchReport.inputs.dpadDown && switchReport.inputs.dpadRight)  hat = SWITCH_PRO_HAT_DOWNRIGHT;
+            else if (switchReport.inputs.dpadDown && switchReport.inputs.dpadLeft)   hat = SWITCH_PRO_HAT_DOWNLEFT;
+            else if (switchReport.inputs.dpadUp && switchReport.inputs.dpadLeft)     hat = SWITCH_PRO_HAT_UPLEFT;
+            else if (switchReport.inputs.dpadUp)                                     hat = SWITCH_PRO_HAT_UP;
+            else if (switchReport.inputs.dpadRight)                                  hat = SWITCH_PRO_HAT_RIGHT;
+            else if (switchReport.inputs.dpadDown)                                   hat = SWITCH_PRO_HAT_DOWN;
+            else if (switchReport.inputs.dpadLeft)                                   hat = SWITCH_PRO_HAT_LEFT;
+
+            uint8_t extra4 = 0;
+            extra4 |= (switchReport.inputs.buttonL  ? 1u : 0u) << 0;
+            extra4 |= (switchReport.inputs.buttonZL ? 1u : 0u) << 1;
+            extra4 |= (switchReport.inputs.buttonLeftSL ? 1u : 0u) << 2;
+            extra4 |= (switchReport.inputs.buttonLeftSR ? 1u : 0u) << 3;
+            hid30[11] = (uint8_t)((hat & 0x0F) | (extra4 << 4));
+
+            // Remaining bytes (52) already zeroed
+
+            if (memcmp(last_report, hid30, sizeof(hid30)) != 0) {
+                if (tud_hid_ready() && sendReport(0, hid30, sizeof(hid30))) {
+                    memcpy(last_report, hid30, sizeof(hid30));
                     reportSent = true;
                 }
-
                 last_report_timer = now;
             }
         }
