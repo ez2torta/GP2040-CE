@@ -110,6 +110,21 @@ typedef struct __attribute__((packed)) {
     uint8_t miscData[54];
 } DSReport;
 
+// Generic template for VID:PID 2563:0575
+// NOTE: Adjust fields/bit order to match your actual HID report for 2563:0575.
+// This is a safe starting point mirroring a common 8-bit axes + hat + 16 buttons layout.
+typedef struct TU_ATTR_PACKED {
+    uint8_t  reportId;   // Often 1; set to 0 if your report has no ID byte
+    uint16_t buttons;    // 16 button bits (LSB = button 1)
+    uint8_t  hat;        // 0..7 for directions, 8 for neutral
+    uint8_t  lx;         // 0..255
+    uint8_t  ly;         // 0..255
+    uint8_t  rx;         // 0..255
+    uint8_t  ry;         // 0..255
+    uint8_t  lt;         // 0..255 (optional, set 0 if unused)
+    uint8_t  rt;         // 0..255 (optional, set 0 if unused)
+} generic_2563_0575_report_t;
+
 // Add other controller structs here
 class GamepadUSBHostListener : public USBListener {
     public:// USB Listener Features

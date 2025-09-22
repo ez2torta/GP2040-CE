@@ -73,6 +73,12 @@ void GamepadUSBHostListener::mount(uint8_t dev_addr, uint8_t instance, uint8_t c
 
         /* Other */
         // these types do not have an identification step, at least for PS4
+        // Custom: VID 0x2563, PID 0x0575
+        case 0x0575:
+            if (controller_vid == 0x2563) {
+                // No special init needed; treat as generic HID gamepad
+            }
+            break;
         case 0x9400:               // Google Stadia controller
         case 0x0510:               // pre-2015 Ultrakstik 360
         case 0x0511:               // Ultrakstik 360
@@ -129,6 +135,11 @@ void GamepadUSBHostListener::process_ctrlr_report(uint8_t dev_addr, uint8_t cons
             break;
         case 0x0CE6:               // DualSense
             process_ds(report, len);
+            break;
+        case 0x0575:               // Custom: only if VID matches
+            if (controller_vid == 0x2563) {
+                process_vid2563_pid0575(report, len);
+            }
             break;
         case 0x9400:               // Google Stadia controller
             process_stadia(report, len);
@@ -469,4 +480,66 @@ void GamepadUSBHostListener::process_ultrastik360(uint8_t const* report, uint16_
     if (controller_report.BTN_GamePadButton6 == 1) _controller_host_state.buttons |= GAMEPAD_MASK_L2;
     if (controller_report.BTN_GamePadButton7 == 1) _controller_host_state.buttons |= GAMEPAD_MASK_R1;
     if (controller_report.BTN_GamePadButton8 == 1) _controller_host_state.buttons |= GAMEPAD_MASK_R2;
+}
+
+// Map VID:PID 2563:0575 into the unified gamepad state
+// Adjust this mapping to your device's actual HID report format.
+void GamepadUSBHostListener::process_vid2563_pid0575(uint8_t const* report, uint16_t len) {
+    // Matches mi_lector_manubrio.c:
+    // Byte0: buttons primary (Triangle, Circle, X, Square, L1, R1, L2, R2)
+    // Byte1: buttons secondary (bit0=Select, bit1=Start, bit4=Home)
+    // Byte2: D-Pad hat (0..7, 8 = neutral)
+    if (len < 3) return;
+
+    uint8_t offset = 0;
+    // If a report ID is present and equals 1, treat it as a prefix
+    if (len >= 4 && report[0] == 0x01) {
+        offset = 1;
+    }
+
+    if (len < offset + 3) return;
+
+    uint8_t b0 = report[offset + 0];
+    uint8_t b1 = report[offset + 1];
+    uint8_t hat = report[offset + 2];
+
+    // Default axes to center for a digital-only pad
+    _controller_host_state.lx = GAMEPAD_JOYSTICK_MID;
+    _controller_host_state.ly = GAMEPAD_JOYSTICK_MID;
+    _controller_host_state.rx = GAMEPAD_JOYSTICK_MID;
+    _controller_host_state.ry = GAMEPAD_JOYSTICK_MID;
+    _controller_host_state.lt = 0;
+    _controller_host_state.rt = 0;
+
+    _controller_host_state.buttons = 0;
+    // Primary face buttons: Triangle, Circle, X, Square
+    if (b0 & (1u << 0)) _controller_host_state.buttons |= GAMEPAD_MASK_B4; // Triangle -> North
+    if (b0 & (1u << 1)) _controller_host_state.buttons |= GAMEPAD_MASK_B2; // Circle -> East
+    if (b0 & (1u << 2)) _controller_host_state.buttons |= GAMEPAD_MASK_B1; // X -> South
+    if (b0 & (1u << 3)) _controller_host_state.buttons |= GAMEPAD_MASK_B3; // Square -> West
+
+    // Shoulders / triggers (digital)
+    if (b0 & (1u << 4)) _controller_host_state.buttons |= GAMEPAD_MASK_L1;
+    if (b0 & (1u << 5)) _controller_host_state.buttons |= GAMEPAD_MASK_R1;
+    if (b0 & (1u << 6)) { _controller_host_state.buttons |= GAMEPAD_MASK_L2; _controller_host_state.lt = 255; }
+    if (b0 & (1u << 7)) { _controller_host_state.buttons |= GAMEPAD_MASK_R2; _controller_host_state.rt = 255; }
+
+    // Select/Start/Home
+    if (b1 & (1u << 0)) _controller_host_state.buttons |= GAMEPAD_MASK_S1;
+    if (b1 & (1u << 1)) _controller_host_state.buttons |= GAMEPAD_MASK_S2;
+    if (b1 & (1u << 4)) _controller_host_state.buttons |= GAMEPAD_MASK_A1; // Home/System
+
+    // Hat -> D-Pad
+    _controller_host_state.dpad = 0;
+    switch (hat) {
+        case 0: _controller_host_state.dpad = GAMEPAD_MASK_UP; break;
+        case 1: _controller_host_state.dpad = GAMEPAD_MASK_UP | GAMEPAD_MASK_RIGHT; break;
+        case 2: _controller_host_state.dpad = GAMEPAD_MASK_RIGHT; break;
+        case 3: _controller_host_state.dpad = GAMEPAD_MASK_RIGHT | GAMEPAD_MASK_DOWN; break;
+        case 4: _controller_host_state.dpad = GAMEPAD_MASK_DOWN; break;
+        case 5: _controller_host_state.dpad = GAMEPAD_MASK_DOWN | GAMEPAD_MASK_LEFT; break;
+        case 6: _controller_host_state.dpad = GAMEPAD_MASK_LEFT; break;
+        case 7: _controller_host_state.dpad = GAMEPAD_MASK_LEFT | GAMEPAD_MASK_UP; break;
+        default: break; // 8 or other -> neutral
+    }
 }
