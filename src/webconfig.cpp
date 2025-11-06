@@ -1873,6 +1873,9 @@ std::string setAddonOptions()
     docToValue(heTriggerOptions.emaSmoothing, doc, "heTriggerSmoothing");
     docToValue(heTriggerOptions.smoothingFactor, doc, "heTriggerSmoothingFactor");
 
+    SerialInputOptions& serialInputOptions = Storage::getInstance().getAddonOptions().serialInputOptions;
+    docToValue(serialInputOptions.enabled, doc, "SerialInputAddonEnabled");
+
     EventManager::getInstance().triggerEvent(new GPStorageSaveEvent(true));
 
     return serialize_json(doc);

@@ -1046,6 +1046,9 @@ void ConfigUtils::initUnsetPropertiesWithDefaults(Config& config)
     INIT_UNSET_PROPERTY(config.addonOptions.tg16Options, dataPin1, TG16_PAD_DATA_PIN1);
     INIT_UNSET_PROPERTY(config.addonOptions.tg16Options, dataPin2, TG16_PAD_DATA_PIN2);
     INIT_UNSET_PROPERTY(config.addonOptions.tg16Options, dataPin3, TG16_PAD_DATA_PIN3);
+
+    // addonOptions.serialInputOptions
+    INIT_UNSET_PROPERTY(config.addonOptions.serialInputOptions, enabled, !!SERIAL_INPUT_ENABLED);
 }
 
 

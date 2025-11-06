@@ -31,6 +31,7 @@
 #include "addons/gamepad_usb_host.h"
 #include "addons/he_trigger.h"
 #include "addons/tg16_input.h"
+#include "addons/serial_input.h"
 
 // Pico includes
 #include "pico/bootrom.h"
@@ -108,6 +109,7 @@ void GP2040::setup() {
 	addons.LoadUSBAddon(new GamepadUSBHostAddon());
 	addons.LoadAddon(new AnalogInput());
 	addons.LoadAddon(new HETriggerAddon());
+	addons.LoadAddon(new SerialInputAddon());
 	addons.LoadAddon(new BootselButtonAddon());
 	addons.LoadAddon(new DualDirectionalInput());
 	addons.LoadAddon(new FocusModeAddon());
